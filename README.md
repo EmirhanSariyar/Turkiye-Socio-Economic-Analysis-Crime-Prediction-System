@@ -2,6 +2,8 @@
 
 This repository is a starter structure for a data science and machine learning project focused on analyzing socio-economic indicators in Turkiye and building a crime prediction system.
 
+End-to-end data science project analyzing socio-economic factors and predicting crime rates across Turkish cities with an interactive dashboard.
+
 ## Project Goals
 
 - Analyze the relationship between socio-economic factors and crime rates.
