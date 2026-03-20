@@ -23,6 +23,8 @@ Using province-based or district-based socio-economic indicators such as unemplo
 - Education and employment indicators
 - Regional development indexes
 
+Detailed collection notes and source strategy are documented in `docs/data_sources.md`.
+
 ## Project Structure
 
 ```text
@@ -31,9 +33,11 @@ Using province-based or district-based socio-economic indicators such as unemplo
 |-- requirements.txt
 |-- README.md
 |-- data/
+|   |-- external/
 |   |-- raw/
 |   |-- interim/
 |   `-- processed/
+|-- docs/
 |-- models/
 |-- notebooks/
 |-- reports/
