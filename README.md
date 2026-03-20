@@ -24,6 +24,8 @@ Using province-based or district-based socio-economic indicators such as unemplo
 - Regional development indexes
 
 Detailed collection notes and source strategy are documented in `docs/data_sources.md`.
+The currently selected source files are tracked in `docs/dataset_inventory.md`.
+Planned raw and processed outputs are tracked in `docs/raw_data_plan.md` and `docs/processed_data_plan.md`.
 
 ## Project Structure
 
