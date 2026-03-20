@@ -29,6 +29,13 @@ def clean_cell(value):
 def normalize_numeric(value):
     if pd.isna(value):
         return None
+
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        number = float(value)
+        if number.is_integer():
+            return int(number)
+        return number
+
     text = str(value).strip()
     if not text:
         return None
@@ -151,7 +158,9 @@ def process_migration() -> pd.DataFrame:
     dataframes = []
 
     for file_path in sorted(migration_dir.glob("*.xls")):
-        df, _ = read_excel_with_header_detection(file_path, engine="xlrd")
+        df = pd.read_excel(file_path, header=2, engine="xlrd")
+        df.columns = normalize_columns(df.columns)
+        df = df.dropna(how="all")
         title_preview = pd.read_excel(file_path, header=None, nrows=2, engine="xlrd")
         title_text = " ".join(filter(None, [clean_cell(v) for v in title_preview.fillna("").iloc[0].tolist()]))
         match = re.search(r"(20\d{2})", title_text)
@@ -180,6 +189,7 @@ def process_migration() -> pd.DataFrame:
 
         cleaned = cleaned.loc[cleaned["province"].notna()]
         cleaned = cleaned.loc[~cleaned["province"].str.lower().str.contains("toplam")]
+        cleaned = cleaned.loc[~cleaned["province"].str.startswith("0 ")]
         dataframes.append(cleaned)
 
     result = pd.concat(dataframes, ignore_index=True).sort_values(["province", "year"])
@@ -199,36 +209,19 @@ def process_justice() -> pd.DataFrame:
 
         year = int(year_match.group(1))
         df = pd.read_excel(justice_file, sheet_name=sheet_name, header=2, engine="openpyxl")
-        df.columns = normalize_columns(df.columns)
         df = df.dropna(how="all")
-
-        province_col = first_matching_column(df.columns.tolist(), ["il_adi"])
-        total_col = first_matching_column(df.columns.tolist(), ["toplam", "yil_ici_yuk"])
-        carry_in_col = first_matching_column(df.columns.tolist(), ["gecen_yildan_devir"])
-        opened_col = first_matching_column(df.columns.tolist(), ["yil_icinde_acilan"])
-        closed_col = first_matching_column(df.columns.tolist(), ["karara_baglanan"])
-
-        carry_out_col = None
-        for candidate in ["gelecek_yila_devir", "gelecek_yila_devredilen", "gelecek_yila_devir_files"]:
-            try:
-                carry_out_col = first_matching_column(df.columns.tolist(), [candidate])
-                break
-            except KeyError:
-                continue
 
         cleaned = pd.DataFrame(
             {
-                "province": df[province_col].map(clean_cell),
+                "province": df.iloc[:, 3].map(clean_cell),
                 "year": year,
-                "investigation_files_total_load": df[total_col].map(normalize_numeric),
-                "investigation_files_carry_in": df[carry_in_col].map(normalize_numeric),
-                "investigation_files_opened": df[opened_col].map(normalize_numeric),
-                "investigation_files_closed": df[closed_col].map(normalize_numeric),
+                "investigation_files_total_load": df.iloc[:, 4].map(normalize_numeric),
+                "investigation_files_carry_in": df.iloc[:, 5].map(normalize_numeric),
+                "investigation_files_opened": df.iloc[:, 6].map(normalize_numeric),
+                "investigation_files_closed": df.iloc[:, 7].map(normalize_numeric),
+                "investigation_files_carry_out": df.iloc[:, 8].map(normalize_numeric),
             }
         )
-
-        if carry_out_col is not None:
-            cleaned["investigation_files_carry_out"] = df[carry_out_col].map(normalize_numeric)
 
         cleaned = cleaned.loc[cleaned["province"].notna()]
         cleaned = cleaned.loc[~cleaned["province"].str.lower().str.contains("türkiye")]
@@ -245,44 +238,20 @@ def process_education() -> pd.DataFrame:
 
     for file_path in sorted(education_dir.glob("*.xls")):
         df = pd.read_excel(file_path, header=4, engine="xlrd")
-        df.columns = normalize_columns(df.columns)
         df = df.dropna(how="all")
-
-        year_col = first_matching_column(df.columns.tolist(), ["yil_year"])
-        province_col = first_matching_column(df.columns.tolist(), ["il_adi"])
-        total_col = first_matching_column(df.columns.tolist(), ["toplam_total"])
-        illiterate_col = first_matching_column(df.columns.tolist(), ["okuma_yazma_bilmeyen"])
-        literate_no_diploma_col = first_matching_column(
-            df.columns.tolist(),
-            ["okuma_yazma_bilen_fakat_bir_okul_bitirmeyen"],
-        )
-        lower_secondary_col = first_matching_column(
-            df.columns.tolist(),
-            ["ortaokul_ve_dengi_meslek_okulu"],
-        )
-        upper_secondary_col = first_matching_column(
-            df.columns.tolist(),
-            ["lise_ve_dengi_meslek_okulu"],
-        )
-        university_col = first_matching_column(
-            df.columns.tolist(),
-            ["yuksekokul_veya_fakulte"],
-        )
-        masters_col = first_matching_column(df.columns.tolist(), ["yuksek_lisans"])
-        doctorate_col = first_matching_column(df.columns.tolist(), ["doktora"])
 
         cleaned = pd.DataFrame(
             {
-                "province": df[province_col].map(clean_cell),
-                "year": pd.to_numeric(df[year_col], errors="coerce"),
-                "education_population_6_plus": df[total_col].map(normalize_numeric),
-                "illiterate_total": df[illiterate_col].map(normalize_numeric),
-                "literate_no_diploma_total": df[literate_no_diploma_col].map(normalize_numeric),
-                "lower_secondary_total": df[lower_secondary_col].map(normalize_numeric),
-                "upper_secondary_total": df[upper_secondary_col].map(normalize_numeric),
-                "university_total": df[university_col].map(normalize_numeric),
-                "masters_total": df[masters_col].map(normalize_numeric),
-                "doctorate_total": df[doctorate_col].map(normalize_numeric),
+                "province": df.iloc[:, 4].map(clean_cell),
+                "year": pd.to_numeric(df.iloc[:, 0], errors="coerce"),
+                "education_population_6_plus": df.iloc[:, 6].map(normalize_numeric),
+                "illiterate_total": df.iloc[:, 10].map(normalize_numeric),
+                "literate_no_diploma_total": df.iloc[:, 14].map(normalize_numeric),
+                "lower_secondary_total": df.iloc[:, 26].map(normalize_numeric),
+                "upper_secondary_total": df.iloc[:, 30].map(normalize_numeric),
+                "university_total": df.iloc[:, 34].map(normalize_numeric),
+                "masters_total": df.iloc[:, 38].map(normalize_numeric),
+                "doctorate_total": df.iloc[:, 42].map(normalize_numeric),
             }
         )
 

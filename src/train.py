@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
@@ -9,28 +7,50 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+from config import PROCESSED_DATA_DIR
 
-def build_sample_dataset() -> pd.DataFrame:
-    """Create a small placeholder dataset until real data is added."""
-    return pd.DataFrame(
-        {
-            "unemployment_rate": [8.1, 12.4, 10.0, 7.3, 15.2, 9.4, 11.1, 6.9],
-            "education_index": [0.72, 0.51, 0.60, 0.78, 0.48, 0.67, 0.55, 0.80],
-            "migration_rate": [1.2, 3.5, 2.2, 0.8, 4.1, 1.5, 2.8, 0.6],
-            "region_type": ["urban", "urban", "mixed", "urban", "mixed", "rural", "urban", "rural"],
-            "high_crime_risk": [0, 1, 1, 0, 1, 0, 1, 0],
-        }
-    )
+
+TARGET_COLUMN = "high_justice_risk"
+MODEL_FILE_NAME = "province_year_modeling_2011_2021.csv"
+
+
+def load_modeling_dataset() -> pd.DataFrame:
+    file_path = PROCESSED_DATA_DIR / MODEL_FILE_NAME
+    if not file_path.exists():
+        raise FileNotFoundError(
+            f"Modeling dataset not found at {file_path}. "
+            "Run `python src/prepare_raw_data.py` and `python src/merge_master_data.py` first."
+        )
+    return pd.read_csv(file_path)
 
 
 def train_baseline_model() -> None:
-    df = build_sample_dataset()
+    df = load_modeling_dataset()
 
-    x = df.drop(columns=["high_crime_risk"])
-    y = df["high_crime_risk"]
+    numeric_features = [
+        "population",
+        "in_migration",
+        "out_migration",
+        "net_migration",
+        "active_insured_total",
+        "active_insured_share_of_population",
+        "illiterate_rate",
+        "upper_secondary_rate",
+        "university_rate",
+        "postgraduate_rate",
+        "higher_education_share",
+    ]
+    categorical_features = ["geographical_region", "statistical_region"]
 
-    numeric_features = ["unemployment_rate", "education_index", "migration_rate"]
-    categorical_features = ["region_type"]
+    available_numeric = [column for column in numeric_features if column in df.columns]
+    available_categorical = [column for column in categorical_features if column in df.columns]
+
+    feature_columns = available_numeric + available_categorical
+    if not feature_columns:
+        raise ValueError("No usable feature columns were found in the modeling dataset.")
+
+    x = df[feature_columns].copy()
+    y = df[TARGET_COLUMN]
 
     numeric_pipeline = Pipeline(
         steps=[
@@ -48,8 +68,8 @@ def train_baseline_model() -> None:
 
     preprocessor = ColumnTransformer(
         transformers=[
-            ("num", numeric_pipeline, numeric_features),
-            ("cat", categorical_pipeline, categorical_features),
+            ("num", numeric_pipeline, available_numeric),
+            ("cat", categorical_pipeline, available_categorical),
         ]
     )
 
@@ -68,6 +88,8 @@ def train_baseline_model() -> None:
     predictions = model.predict(x_test)
 
     print("Baseline model trained successfully.")
+    print(f"Rows used: {len(df)}")
+    print(f"Features used: {', '.join(feature_columns)}")
     print(classification_report(y_test, predictions, zero_division=0))
 
 
