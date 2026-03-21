@@ -1,4 +1,4 @@
-# Turkiye Socio-Economic Analysis Crime Prediction System
+# Turkiye Socioeconomic Justice Risk Analysis
 
 Province-level socio-economic analysis and justice-risk modeling project for Turkiye, built with official public datasets and an interactive Streamlit dashboard.
 
@@ -136,7 +136,7 @@ Create and activate a virtual environment:
 
 ```bash
 git clone <repository-url>
-cd Turkiye-Socio-Economic-Analysis-Crime-Prediction-System
+cd Turkiye-Socioeconomic-Justice-Risk-Analysis
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
