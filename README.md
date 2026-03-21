@@ -135,6 +135,8 @@ This keeps the main methodology clean while still exposing newer education and e
 Create and activate a virtual environment:
 
 ```bash
+git clone <repository-url>
+cd Turkiye-Socio-Economic-Analysis-Crime-Prediction-System
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
