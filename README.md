@@ -84,6 +84,22 @@ The repository currently includes two baseline model variants:
 
 The `Wide Coverage Flow Model` is the stronger general-purpose baseline at the moment because it retains much broader data support.
 
+## Methods
+
+The project currently uses the following data science and machine learning methods:
+
+- province-year panel data construction from multi-source public datasets
+- data cleaning, province-name normalization, and schema harmonization
+- feature engineering for migration, employment, population, and education indicators
+- proxy-target modeling using recorded justice investigation intensity
+- binary classification and yearly risk-band generation
+- logistic regression baseline modeling
+- missing-value imputation for numeric and categorical variables
+- feature scaling for numeric variables
+- one-hot encoding for categorical regional variables
+- train/test split evaluation
+- interactive visual analytics through a Streamlit dashboard
+
 ## Dashboard
 
 The Streamlit dashboard includes:
