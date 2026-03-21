@@ -12,10 +12,13 @@ import streamlit as st
 
 BASE_DIR = Path(__file__).resolve().parent
 PROCESSED_DIR = BASE_DIR / "data" / "processed"
+RAW_DIR = BASE_DIR / "data" / "raw"
 MAPS_DIR = BASE_DIR / "data" / "external" / "maps"
 
 MASTER_PATH = PROCESSED_DIR / "province_year_master_2011_2021.csv"
 MODELING_PATH = PROCESSED_DIR / "province_year_modeling_2011_2021.csv"
+RAW_SGK_PATH = RAW_DIR / "sgk_active_insured_2009_2024.csv"
+RAW_MEB_PATH = RAW_DIR / "meb_secondary_gross_enrollment_2011_2025.csv"
 GEOJSON_PATH = MAPS_DIR / "lvl1-TR.geojson"
 
 TURKISH_ALPHABET = "abcçdefgğhıijklmnoöprsştuüvyz"
@@ -78,8 +81,9 @@ st.set_page_config(
 
 
 @st.cache_data
-def load_datasets() -> tuple[pd.DataFrame, pd.DataFrame]:
-    if not MASTER_PATH.exists() or not MODELING_PATH.exists():
+def load_datasets() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    required_paths = [MASTER_PATH, MODELING_PATH, RAW_SGK_PATH, RAW_MEB_PATH]
+    if not all(path.exists() for path in required_paths):
         raise FileNotFoundError(
             "Processed files are missing. Run `python src/prepare_raw_data.py` "
             "and `python src/merge_master_data.py` first."
@@ -87,7 +91,9 @@ def load_datasets() -> tuple[pd.DataFrame, pd.DataFrame]:
 
     master_df = pd.read_csv(MASTER_PATH)
     modeling_df = pd.read_csv(MODELING_PATH)
-    return master_df, modeling_df
+    raw_sgk_df = pd.read_csv(RAW_SGK_PATH)
+    raw_meb_df = pd.read_csv(RAW_MEB_PATH)
+    return master_df, modeling_df, raw_sgk_df, raw_meb_df
 
 
 @st.cache_data
@@ -106,6 +112,12 @@ def format_number(value, digits: int = 0) -> str:
     if pd.isna(value):
         return "N/A"
     return f"{value:,.{digits}f}"
+
+
+def format_percent(value, digits: int = 2) -> str:
+    if pd.isna(value):
+        return "N/A"
+    return f"{value:.{digits}f}%"
 
 
 def turkish_sort_key(value: str) -> list[int]:
@@ -221,7 +233,7 @@ def build_geojson_for_year(geojson_data: dict, year_df: pd.DataFrame, selected_p
     return choropleth
 
 
-master_df, modeling_df = load_datasets()
+master_df, modeling_df, raw_sgk_df, raw_meb_df = load_datasets()
 geojson_data = load_geojson()
 
 risk_labels = build_yearly_risk_labels(master_df)
@@ -253,6 +265,13 @@ year_df = app_df.loc[app_df["year"] == selected_year].sort_values(
 selected_row = province_df.loc[province_df["year"] == selected_year]
 selected_row = selected_row.iloc[0] if not selected_row.empty else None
 
+recent_sgk_df = raw_sgk_df.loc[raw_sgk_df["province"] == selected_province].copy()
+recent_meb_df = raw_meb_df.loc[raw_meb_df["province"] == selected_province].copy()
+recent_sgk_df["year"] = pd.to_numeric(recent_sgk_df["year"], errors="coerce")
+recent_meb_df["year"] = pd.to_numeric(recent_meb_df["year"], errors="coerce")
+recent_sgk_df = recent_sgk_df.sort_values("year")
+recent_meb_df = recent_meb_df.sort_values("year")
+
 col1, col2, col3, col4 = st.columns(4)
 col1.metric(
     "Investigation Files Opened",
@@ -271,44 +290,122 @@ col4.metric(
     selected_row["risk_label"] if selected_row is not None and pd.notna(selected_row["risk_label"]) else "N/A",
 )
 
-st.markdown("### Province Trend")
-volume_trend_df = province_df[
-    ["year", "investigation_files_opened", "active_insured_total"]
-].copy()
-volume_trend_df = volume_trend_df.rename(
-    columns={
-        "year": "Year",
-        "investigation_files_opened": "Justice Files Opened",
-        "active_insured_total": "Active Insured",
-    }
-).melt(id_vars="Year", var_name="Metric", value_name="Value")
+col5, col6 = st.columns(2)
+col5.metric(
+    "General Secondary Gross Enrollment",
+    format_percent(selected_row["general_secondary_gross_enrollment_rate"])
+    if selected_row is not None
+    else "N/A",
+)
+col6.metric(
+    "Vocational Secondary Gross Enrollment",
+    format_percent(selected_row["vocational_secondary_gross_enrollment_rate"])
+    if selected_row is not None
+    else "N/A",
+)
 
-rate_trend_df = province_df[
-    ["year", "upper_secondary_rate", "university_rate", "higher_education_share"]
-].copy()
-rate_trend_df = rate_trend_df.rename(
-    columns={
-        "year": "Year",
-        "upper_secondary_rate": "Upper Secondary Rate",
-        "university_rate": "University Rate",
-        "higher_education_share": "Higher Education Share",
-    }
-).melt(id_vars="Year", var_name="Metric", value_name="Value")
+main_tab, recent_tab = st.tabs(["Main Risk View (2011-2021)", "Recent Trends View (2011-2025)"])
 
-chart_col1, chart_col2 = st.columns(2)
-with chart_col1:
-    st.markdown("**Volume Metrics**")
-    st.altair_chart(
-        build_hover_chart(volume_trend_df, "Count", ",.0f"),
-        width="stretch",
+with main_tab:
+    st.markdown("### Province Trend")
+    volume_trend_df = province_df[
+        ["year", "investigation_files_opened", "active_insured_total"]
+    ].copy()
+    volume_trend_df = volume_trend_df.rename(
+        columns={
+            "year": "Year",
+            "investigation_files_opened": "Justice Files Opened",
+            "active_insured_total": "Active Insured",
+        }
+    ).melt(id_vars="Year", var_name="Metric", value_name="Value")
+
+    rate_trend_df = province_df[
+        [
+            "year",
+            "general_secondary_gross_enrollment_rate",
+            "vocational_secondary_gross_enrollment_rate",
+            "university_rate",
+        ]
+    ].copy()
+    rate_trend_df = rate_trend_df.rename(
+        columns={
+            "year": "Year",
+            "general_secondary_gross_enrollment_rate": "General Secondary Gross Enrollment",
+            "vocational_secondary_gross_enrollment_rate": "Vocational Secondary Gross Enrollment",
+            "university_rate": "University Rate",
+        }
+    ).melt(id_vars="Year", var_name="Metric", value_name="Value")
+    rate_trend_df = rate_trend_df.dropna(subset=["Value"]).copy()
+    metric_counts = rate_trend_df.groupby("Metric")["Value"].count()
+    valid_metrics = metric_counts[metric_counts > 1].index.tolist()
+    rate_trend_df = rate_trend_df.loc[rate_trend_df["Metric"].isin(valid_metrics)].copy()
+
+    chart_col1, chart_col2 = st.columns(2)
+    with chart_col1:
+        st.markdown("**Volume Metrics**")
+        st.altair_chart(
+            build_hover_chart(volume_trend_df, "Count", ",.0f"),
+            width="stretch",
+        )
+
+    with chart_col2:
+        st.markdown("**Education Indicators**")
+        if rate_trend_df.empty:
+            st.info("No multi-year education trend is available for the selected province.")
+        else:
+            st.altair_chart(
+                build_hover_chart(rate_trend_df, "Rate / Percent", ".2f"),
+                width="stretch",
+            )
+
+with recent_tab:
+    st.markdown("### Recent Monitoring Trend")
+    st.caption(
+        "This view extends beyond 2021 using SGK and MEB education series. "
+        "It is for monitoring recent changes, not for justice-risk labeling."
     )
-
-with chart_col2:
-    st.markdown("**Education Rates**")
-    st.altair_chart(
-        build_hover_chart(rate_trend_df, "Rate", ".4f"),
-        width="stretch",
+    recent_trend_df = recent_sgk_df[["year", "active_insured_total"]].rename(
+        columns={"year": "Year", "active_insured_total": "Active Insured"}
     )
+    recent_trend_df = recent_trend_df.merge(
+        recent_meb_df[
+            [
+                "year",
+                "general_secondary_gross_enrollment_rate",
+                "vocational_secondary_gross_enrollment_rate",
+            ]
+        ].rename(
+            columns={
+                "year": "Year",
+                "general_secondary_gross_enrollment_rate": "General Secondary Gross Enrollment",
+                "vocational_secondary_gross_enrollment_rate": "Vocational Secondary Gross Enrollment",
+            }
+        ),
+        on="Year",
+        how="outer",
+    ).sort_values("Year")
+
+    recent_volume_df = recent_trend_df[["Year", "Active Insured"]].melt(
+        id_vars="Year", var_name="Metric", value_name="Value"
+    )
+    recent_education_df = recent_trend_df[
+        ["Year", "General Secondary Gross Enrollment", "Vocational Secondary Gross Enrollment"]
+    ].melt(id_vars="Year", var_name="Metric", value_name="Value")
+    recent_education_df = recent_education_df.dropna(subset=["Value"])
+
+    recent_col1, recent_col2 = st.columns(2)
+    with recent_col1:
+        st.markdown("**Active Insured Trend**")
+        st.altair_chart(
+            build_hover_chart(recent_volume_df, "Count", ",.0f"),
+            width="stretch",
+        )
+    with recent_col2:
+        st.markdown("**MEB Gross Enrollment Trend**")
+        st.altair_chart(
+            build_hover_chart(recent_education_df, "Percent", ".2f"),
+            width="stretch",
+        )
 
 st.markdown("### Turkey Province Map")
 year_geojson = build_geojson_for_year(geojson_data, year_df, selected_province)
@@ -354,6 +451,9 @@ snapshot_cols = [
     "out_migration",
     "net_migration",
     "active_insured_total",
+    "upper_secondary_gross_enrollment_rate",
+    "general_secondary_gross_enrollment_rate",
+    "vocational_secondary_gross_enrollment_rate",
     "illiterate_rate",
     "upper_secondary_rate",
     "university_rate",

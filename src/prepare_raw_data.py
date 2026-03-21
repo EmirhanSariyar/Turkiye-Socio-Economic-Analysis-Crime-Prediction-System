@@ -190,6 +190,7 @@ def process_migration() -> pd.DataFrame:
         cleaned = cleaned.loc[cleaned["province"].notna()]
         cleaned = cleaned.loc[~cleaned["province"].str.lower().str.contains("toplam")]
         cleaned = cleaned.loc[~cleaned["province"].str.startswith("0 ")]
+        cleaned = cleaned.loc[~cleaned["province"].str.contains("TurkStat|TÜİK", case=False, na=False)]
         dataframes.append(cleaned)
 
     result = pd.concat(dataframes, ignore_index=True).sort_values(["province", "year"])
@@ -224,7 +225,7 @@ def process_justice() -> pd.DataFrame:
         )
 
         cleaned = cleaned.loc[cleaned["province"].notna()]
-        cleaned = cleaned.loc[~cleaned["province"].str.lower().str.contains("türkiye")]
+        cleaned = cleaned.loc[~cleaned["province"].str.contains("TÜRKİYE|TURKIYE|TOPLAM", case=False, na=False)]
         dataframes.append(cleaned)
 
     result = pd.concat(dataframes, ignore_index=True).sort_values(["province", "year"])
@@ -257,8 +258,14 @@ def process_education() -> pd.DataFrame:
 
         cleaned["year"] = cleaned["year"].ffill().astype("Int64")
         cleaned = cleaned.loc[cleaned["province"].notna()]
-        cleaned = cleaned.loc[~cleaned["province"].str.lower().str.contains("türkiye")]
+        cleaned = cleaned.loc[~cleaned["province"].str.contains("Türkiye|TURKIYE", case=False, na=False)]
         cleaned["province"] = cleaned["province"].str.strip()
+        cleaned["province"] = cleaned["province"].replace(
+            {
+                "Afyon": "Afyonkarahisar",
+                "K.Maraş": "Kahramanmaraş",
+            }
+        )
 
         denominator = cleaned["education_population_6_plus"].replace({0: pd.NA})
         cleaned["illiterate_rate"] = cleaned["illiterate_total"] / denominator
@@ -274,6 +281,49 @@ def process_education() -> pd.DataFrame:
     result = result.drop_duplicates(subset=["province", "year"], keep="last")
     result["year"] = result["year"].astype(int)
     return result
+
+
+def process_meb_education() -> pd.DataFrame:
+    meb_file = EXTERNAL_DIR / "education" / "meb_ortaogretim_okulasma_oranlari_il_bazli.xlsx"
+    df = pd.read_excel(meb_file, sheet_name="Long Format", header=2, engine="openpyxl")
+    df = df.dropna(how="all")
+
+    cleaned = pd.DataFrame(
+        {
+            "tr_code": df.iloc[:, 0].map(clean_cell),
+            "province": df.iloc[:, 1].map(clean_cell),
+            "academic_year": df.iloc[:, 2].map(clean_cell),
+            "upper_secondary_gross_enrollment_rate": df.iloc[:, 3].map(normalize_numeric),
+            "general_secondary_gross_enrollment_rate": df.iloc[:, 4].map(normalize_numeric),
+            "vocational_secondary_gross_enrollment_rate": df.iloc[:, 5].map(normalize_numeric),
+        }
+    )
+
+    cleaned = cleaned.loc[cleaned["province"].notna()].copy()
+    cleaned["province"] = cleaned["province"].str.strip()
+    cleaned["province"] = cleaned["province"].replace(
+        {
+            "Afyon": "Afyonkarahisar",
+            "K.Maras": "Kahramanmaras",
+            "Kahramanmaras": "Kahramanmaras",
+        }
+    )
+
+    # Align academic years like 2010-2011 to the ending calendar year (2011).
+    cleaned["year"] = cleaned["academic_year"].str.extract(r"(20\d{2})$")[0]
+    cleaned["year"] = pd.to_numeric(cleaned["year"], errors="coerce").astype("Int64")
+    cleaned = cleaned.loc[cleaned["year"].notna()].copy()
+    cleaned["year"] = cleaned["year"].astype(int)
+
+    for column in [
+        "upper_secondary_gross_enrollment_rate",
+        "general_secondary_gross_enrollment_rate",
+        "vocational_secondary_gross_enrollment_rate",
+    ]:
+        cleaned[column] = pd.to_numeric(cleaned[column], errors="coerce").round(2)
+
+    cleaned = cleaned.drop_duplicates(subset=["province", "year"], keep="last")
+    return cleaned.sort_values(["province", "year"]).reset_index(drop=True)
 
 
 def process_children_national() -> pd.DataFrame:
@@ -321,6 +371,7 @@ def write_outputs() -> None:
     process_migration().to_csv(RAW_DIR / "migration_provincial.csv", index=False)
     process_justice().to_csv(RAW_DIR / "justice_provincial_2011_2021.csv", index=False)
     process_education().to_csv(RAW_DIR / "education_provincial_2021_2024.csv", index=False)
+    process_meb_education().to_csv(RAW_DIR / "meb_secondary_gross_enrollment_2011_2025.csv", index=False)
     process_children_national().to_csv(RAW_DIR / "children_security_unit_national_2015_2024.csv", index=False)
 
     print("Wrote:")
@@ -328,6 +379,7 @@ def write_outputs() -> None:
     print(" - data/raw/migration_provincial.csv")
     print(" - data/raw/justice_provincial_2011_2021.csv")
     print(" - data/raw/education_provincial_2021_2024.csv")
+    print(" - data/raw/meb_secondary_gross_enrollment_2011_2025.csv")
     print(" - data/raw/children_security_unit_national_2015_2024.csv")
 
 

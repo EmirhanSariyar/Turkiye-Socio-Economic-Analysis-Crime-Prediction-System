@@ -28,10 +28,26 @@ PROVINCE_ALIASES = {
     "eskisehir": "eskisehir",
     "gumushane": "gumushane",
 }
+TURKISH_CHAR_MAP = str.maketrans(
+    {
+        "ç": "c",
+        "ğ": "g",
+        "ı": "i",
+        "İ": "I",
+        "ö": "o",
+        "ş": "s",
+        "ü": "u",
+        "Ç": "C",
+        "Ğ": "G",
+        "Ö": "O",
+        "Ş": "S",
+        "Ü": "U",
+    }
+)
 
 
 def normalize_province_name(value: str) -> str:
-    text = str(value).strip().lower()
+    text = str(value).translate(TURKISH_CHAR_MAP).strip().lower()
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
     text = re.sub(r"[^a-z0-9]+", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
@@ -58,7 +74,9 @@ def with_standard_keys(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_baseline_year_frame(provinces: pd.Series) -> pd.DataFrame:
-    unique_provinces = sorted(provinces.dropna().unique())
+    unique_provinces = sorted(
+        province for province in provinces.dropna().unique() if province != "turkiyetoplam"
+    )
     records = []
     for province_key in unique_provinces:
         for year in range(BASELINE_START_YEAR, BASELINE_END_YEAR + 1):
@@ -71,11 +89,19 @@ def merge_sources() -> pd.DataFrame:
     sgk = with_standard_keys(load_csv("sgk_active_insured_2009_2024.csv"))
     migration = with_standard_keys(load_csv("migration_provincial.csv"))
     education = with_standard_keys(load_csv("education_provincial_2021_2024.csv"))
+    meb_education = with_standard_keys(load_csv("meb_secondary_gross_enrollment_2011_2025.csv"))
+
+    justice = justice.loc[justice["province_key"] != "turkiyetoplam"].copy()
+    sgk = sgk.loc[sgk["province_key"] != "turkiyetoplam"].copy()
+    migration = migration.loc[migration["province_key"] != "turkiyetoplam"].copy()
+    education = education.loc[education["province_key"] != "turkiyetoplam"].copy()
+    meb_education = meb_education.loc[meb_education["province_key"] != "turkiyetoplam"].copy()
 
     justice = justice.loc[justice["year"].between(BASELINE_START_YEAR, BASELINE_END_YEAR)]
     sgk = sgk.loc[sgk["year"].between(BASELINE_START_YEAR, BASELINE_END_YEAR)]
     migration = migration.loc[migration["year"].between(BASELINE_START_YEAR, BASELINE_END_YEAR)]
     education = education.loc[education["year"].between(BASELINE_START_YEAR, BASELINE_END_YEAR)]
+    meb_education = meb_education.loc[meb_education["year"].between(BASELINE_START_YEAR, BASELINE_END_YEAR)]
 
     province_name_map = (
         justice[["province_key", "province"]]
@@ -130,11 +156,21 @@ def merge_sources() -> pd.DataFrame:
         "university_rate",
         "postgraduate_rate",
     ]
+    meb_education_columns = [
+        "province_key",
+        "year",
+        "tr_code",
+        "academic_year",
+        "upper_secondary_gross_enrollment_rate",
+        "general_secondary_gross_enrollment_rate",
+        "vocational_secondary_gross_enrollment_rate",
+    ]
 
     master = master.merge(justice[justice_columns], on=["province_key", "year"], how="left")
     master = master.merge(sgk[sgk_columns], on=["province_key", "year"], how="left")
     master = master.merge(migration[migration_columns], on=["province_key", "year"], how="left")
     master = master.merge(education[education_columns], on=["province_key", "year"], how="left")
+    master = master.merge(meb_education[meb_education_columns], on=["province_key", "year"], how="left")
 
     master = master.rename(columns={"province_name": "province"})
 
@@ -184,6 +220,11 @@ def merge_sources() -> pd.DataFrame:
         "university_rate",
         "postgraduate_rate",
         "higher_education_share",
+        "tr_code",
+        "academic_year",
+        "upper_secondary_gross_enrollment_rate",
+        "general_secondary_gross_enrollment_rate",
+        "vocational_secondary_gross_enrollment_rate",
         "investigation_files_total_load",
         "investigation_files_carry_in",
         "investigation_files_opened",
@@ -193,7 +234,7 @@ def merge_sources() -> pd.DataFrame:
     ]
 
     if "investigation_files_carry_out" in master.columns:
-        ordered_columns.insert(29, "investigation_files_carry_out")
+        ordered_columns.insert(34, "investigation_files_carry_out")
 
     master = master[ordered_columns].sort_values(["province", "year"]).reset_index(drop=True)
     return master
@@ -208,6 +249,8 @@ def build_modeling_frame(master: pd.DataFrame) -> pd.DataFrame:
                 "active_insured_total",
                 "net_migration",
                 "investigation_files_opened",
+                "general_secondary_gross_enrollment_rate",
+                "vocational_secondary_gross_enrollment_rate",
             ]
         ].notna().all(axis=1)
     ].copy()

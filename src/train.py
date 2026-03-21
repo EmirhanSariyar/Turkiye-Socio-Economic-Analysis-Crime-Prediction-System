@@ -114,6 +114,8 @@ def train_baseline_models() -> None:
         "net_migration",
         "active_insured_total",
         "active_insured_share_of_population",
+        "general_secondary_gross_enrollment_rate",
+        "vocational_secondary_gross_enrollment_rate",
         "illiterate_rate",
         "upper_secondary_rate",
         "university_rate",
@@ -134,6 +136,8 @@ def train_baseline_models() -> None:
     wide_numeric_features = [
         "year",
         "active_insured_total",
+        "general_secondary_gross_enrollment_rate",
+        "vocational_secondary_gross_enrollment_rate",
     ]
     wide_categorical_features = ["geographical_region", "statistical_region"]
 
