@@ -1,31 +1,106 @@
-# Turkiye-Socio-Economic-Analysis-Crime-Prediction-System
+# Turkiye Socio-Economic Analysis Crime Prediction System
 
-This repository is a starter structure for a data science and machine learning project focused on analyzing socio-economic indicators in Turkiye and building a crime prediction system.
+Province-level socio-economic analysis and justice-risk modeling project for Turkiye, built with official public datasets and an interactive Streamlit dashboard.
 
-End-to-end data science project analyzing socio-economic factors and predicting crime rates across Turkish cities with an interactive dashboard.
+## Overview
 
-## Project Goals
+This project studies how province-level socio-economic indicators relate to recorded justice-file intensity in Turkiye.
 
-- Analyze the relationship between socio-economic factors and crime rates.
-- Build a clean, reproducible machine learning pipeline.
-- Compare multiple models for crime prediction.
-- Create visual reports and a simple demo interface.
+The system combines:
 
-## Suggested Problem Statement
+- provincial justice investigation statistics
+- SGK active insured counts
+- migration indicators
+- education indicators from both TURKSTAT and MEB
+- an interactive dashboard for province and year comparisons
 
-Using province-based or district-based socio-economic indicators such as unemployment, education, migration, income, population density, and age distribution, estimate or classify crime trends in Turkiye.
+The project does **not** claim to measure absolute crime truth directly.  
+Its main target is a **justice proxy** based on recorded investigation-file volume.
 
-## Suggested Data Sources
+## Problem Definition
 
-- TURKSTAT socio-economic data
-- Ministry of Interior or public safety statistics
-- Population and migration datasets
-- Education and employment indicators
-- Regional development indexes
+The core modeling question is:
 
-Detailed collection notes and source strategy are documented in `docs/data_sources.md`.
-The currently selected source files are tracked in `docs/dataset_inventory.md`.
-Planned raw and processed outputs are tracked in `docs/raw_data_plan.md` and `docs/processed_data_plan.md`.
+> Can province-level socio-economic indicators help explain or classify recorded justice-file intensity across Turkish provinces?
+
+In the current implementation, the strongest province-level target is:
+
+- `investigation_files_opened`
+
+This target comes from provincial chief public prosecutor statistics and is used to derive yearly `Low / Medium / High` justice-risk bands.
+
+## Dataset Summary
+
+The harmonized baseline modeling window is:
+
+- `2011-2021`
+
+This window was selected because it is the cleanest province-level overlap across the main justice and socio-economic sources.
+
+### Main Sources
+
+- `Justice`: provincial investigation-file statistics, `2011-2021`
+- `SGK`: active insured totals, `2009-2024`
+- `Migration`: in-migration, out-migration, net migration, province population
+- `TURKSTAT education`: attainment-style indicators for recent years
+- `MEB education`: province-level gross enrollment ratios for upper secondary education, `2011-2025`
+
+### Current Feature Groups
+
+- `active_insured_total`
+- `population`
+- `in_migration`, `out_migration`, `net_migration`
+- `general_secondary_gross_enrollment_rate`
+- `vocational_secondary_gross_enrollment_rate`
+- `illiterate_rate`
+- `university_rate`
+- region-based categorical indicators
+
+### Important Interpretation Note
+
+MEB education variables in this repository are **gross enrollment rates**, not attainment rates.
+
+That means:
+
+- values may exceed `100`
+- they should be interpreted as enrollment intensity / participation proxies
+- they should not be interpreted as direct graduation or attainment levels
+
+## Modeling Approach
+
+The repository currently includes two baseline model variants:
+
+### 1. Rich Feature Rate Model
+
+- narrower overlap
+- richer socio-economic feature set
+- useful for detailed cross-sectional analysis
+
+### 2. Wide Coverage Flow Model
+
+- broader temporal coverage
+- stronger support across `2011-2021`
+- currently the most stable baseline for wide province-year analysis
+
+The `Wide Coverage Flow Model` is the stronger general-purpose baseline at the moment because it retains much broader data support.
+
+## Dashboard
+
+The Streamlit dashboard includes:
+
+- province and year selection
+- justice-risk metrics for the selected province
+- province-level trend charts
+- choropleth map of Turkish provinces
+- province ranking for the selected year
+- a recent monitoring view for post-2021 SGK and MEB trends
+
+The dashboard is intentionally split into two views:
+
+- `Main Risk View (2011-2021)`
+- `Recent Trends View (2011-2025)`
+
+This keeps the main methodology clean while still exposing newer education and employment trends.
 
 ## Project Structure
 
@@ -37,49 +112,83 @@ Planned raw and processed outputs are tracked in `docs/raw_data_plan.md` and `do
 |-- data/
 |   |-- external/
 |   |-- raw/
-|   |-- interim/
 |   `-- processed/
 |-- docs/
+|   |-- data_sources.md
+|   |-- dataset_inventory.md
+|   |-- raw_data_plan.md
+|   `-- processed_data_plan.md
 |-- models/
 |-- notebooks/
 |-- reports/
-|   `-- figures/
 |-- src/
-|   |-- __init__.py
 |   |-- config.py
-|   |-- data_loader.py
-|   |-- features.py
-|   |-- train.py
-|   `-- evaluate.py
+|   |-- merge_master_data.py
+|   |-- prepare_raw_data.py
+|   |-- source_inventory.py
+|   `-- train.py
 `-- tests/
 ```
 
-## Quick Start
+## How To Run
+
+Create and activate a virtual environment:
 
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-python src/train.py
-python app.py
 ```
 
-## Initial Roadmap
+Build the raw and processed datasets:
 
-1. Collect and merge province-level datasets.
-2. Clean missing values and standardize features.
-3. Define the target variable.
-4. Train baseline models.
-5. Evaluate results with regression or classification metrics.
-6. Visualize findings and publish the repository on GitHub.
+```bash
+python src/prepare_raw_data.py
+python src/merge_master_data.py
+```
 
-## Example Research Questions
+Train the baseline models:
 
-- Does unemployment correlate with higher crime levels?
-- Do migration and urbanization patterns affect specific crime types?
-- Which socio-economic indicators are the strongest predictors?
-- Can we forecast high-risk regions using historical data?
+```bash
+python src/train.py
+```
 
-## Notes
+Run the dashboard:
 
-This is currently a starter template. The next strong step is to select the exact target variable and gather the first version of the dataset.
+```bash
+streamlit run app.py
+```
+
+## Current Outputs
+
+Generated raw datasets include:
+
+- `data/raw/justice_provincial_2011_2021.csv`
+- `data/raw/sgk_active_insured_2009_2024.csv`
+- `data/raw/migration_provincial.csv`
+- `data/raw/education_provincial_2021_2024.csv`
+- `data/raw/meb_secondary_gross_enrollment_2011_2025.csv`
+
+Generated processed datasets include:
+
+- `data/processed/province_year_master_2011_2021.csv`
+- `data/processed/province_year_modeling_2011_2021.csv`
+
+## Limitations
+
+- The project uses a **justice proxy**, not direct crime truth.
+- The strongest province-level justice target currently ends at `2021`.
+- Some richer socio-economic features are only available for narrower year ranges.
+- Newer post-2021 trends are currently presented as monitoring views rather than unified justice-risk labels.
+
+## Future Improvements
+
+- improve README visuals with final dashboard screenshots
+- refine evaluation outputs and model interpretation
+- revisit smoother map interactivity in the final frontend polish stage
+- add stronger explainability around province-level risk differences
+- remove temporary internal planning files before final public release
+
+## License
+
+This project includes an MIT license file in the repository.
