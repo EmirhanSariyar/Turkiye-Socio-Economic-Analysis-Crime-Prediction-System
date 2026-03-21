@@ -102,6 +102,22 @@ The dashboard is intentionally split into two views:
 
 This keeps the main methodology clean while still exposing newer education and employment trends.
 
+## Dashboard Preview
+
+The current dashboard provides province-level justice-risk monitoring, socio-economic trend analysis, and comparative provincial views.
+
+### Dashboard Overview
+
+![Dashboard Overview](reports/figures/dashboard-overview.png)
+
+### Province Risk Map
+
+![Province Risk Map](reports/figures/province-risk-map.png)
+
+### Ranking and Coverage
+
+![Ranking and Coverage](reports/figures/ranking-and-coverage.png)
+
 ## Project Structure
 
 ```text
@@ -185,7 +201,6 @@ Generated processed datasets include:
 
 ## Future Improvements
 
-- improve README visuals with final dashboard screenshots
 - refine evaluation outputs and model interpretation
 - revisit smoother map interactivity in the final frontend polish stage
 - add stronger explainability around province-level risk differences
